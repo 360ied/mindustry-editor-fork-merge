@@ -231,7 +231,10 @@ public enum EditorTool{
                 editor.drawBlocks(x, y, tile -> Mathf.chance(chance));
             }
         }
-    };
+    },
+    copy(KeyCode.c, "controls"),
+    flip,
+    rotate;
 
     public static final EditorTool[] all = values();
 

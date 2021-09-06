@@ -47,7 +47,7 @@ public class PowerNode extends PowerBlock{
         config(Integer.class, (entity, value) -> {
             PowerModule power = entity.power;
             Building other = world.build(value);
-            boolean contains = power.links.contains(value), valid = other != null && other.power != null;
+            boolean contains = power.links.contains(value) && !state.isEditor(), valid = other != null && other.power != null;
 
             if(contains){
                 //unlink

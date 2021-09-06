@@ -72,7 +72,10 @@ public enum Binding implements KeyBind{
     chat_scroll(new Axis(KeyCode.scroll)),
     chat_mode(KeyCode.tab),
     console(KeyCode.f8),
-    ;
+    editor_copy_flip_x(KeyCode.x),
+    editor_copy_flip_y(KeyCode.z),
+    editor_copy(KeyCode.c),
+    editor_paste(KeyCode.v);
 
     private final KeybindValue defaultValue;
     private final String category;

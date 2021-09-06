@@ -21,6 +21,7 @@ import mindustry.core.GameState.*;
 import mindustry.game.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
+import mindustry.input.*;
 import mindustry.io.*;
 import mindustry.maps.*;
 import mindustry.ui.*;
@@ -484,6 +485,13 @@ public class MapEditorDialog extends Dialog implements Disposable{
                     tools.stack(button, mode);
                 };
 
+                Color transparent = new Color(0, 0, 0, 0);
+                CopyToolAdder copyTool = (icon, func, cond) -> {
+                    ImageButton flip = tools.button(icon, Styles.cleari, func).get();
+                    flip.setDisabled(cond);
+                    flip.update(() -> flip.getImage().setColor(flip.isDisabled() ? transparent : Color.white));
+                };
+
                 tools.defaults().size(size, size);
 
                 tools.button(Icon.menu, Styles.cleari, menu::show);
@@ -518,10 +526,29 @@ public class MapEditorDialog extends Dialog implements Disposable{
                 addTool.get(EditorTool.spray);
 
                 ImageButton rotate = tools.button(Icon.right, Styles.cleari, () -> editor.rotation = (editor.rotation + 1) % 4).get();
+                rotate.updateVisibility();
                 rotate.getImage().update(() -> {
                     rotate.getImage().setRotation(editor.rotation * 90);
                     rotate.getImage().setOrigin(Align.center);
                 });
+
+                tools.row();
+
+                Copy c = editor.copyData;
+                addTool.get(EditorTool.copy);
+                Boolp con1 = () -> view.tool != EditorTool.copy || (c.fh == 0 || c.fw == 0) ;
+                copyTool.add(Icon.upload, c::copy, con1);
+                copyTool.add(Icon.download, () -> {
+                    c.paste();
+                    editor.flushOp();
+                }, con1);
+
+                tools.row();
+
+                Boolp con2 = () -> !view.copy();
+                copyTool.add(Icon.flipX, () -> c.flipX(true), con2);
+                copyTool.add(Icon.flipY, () -> c.flipY(true), con2);
+                copyTool.add(Icon.rotate, c::rotR, con2);
 
                 tools.row();
 
@@ -595,7 +622,18 @@ public class MapEditorDialog extends Dialog implements Disposable{
 
     private void doInput(){
 
+        Copy c = editor.copyData;
+
         if(Core.input.ctrl()){
+            if(view.tool == EditorTool.copy){
+                if(Core.input.keyTap(Binding.editor_copy)){
+                    c.copy();
+                }else if(Core.input.keyTap(Binding.editor_paste)){
+                    c.paste();
+                    editor.flushOp();
+                }
+            }
+
             //alt mode select
             for(int i = 0; i < view.getTool().altModes.length; i++){
                 if(i + 1 < KeyCode.numbers.length && Core.input.keyTap(KeyCode.numbers[i + 1])){
@@ -603,6 +641,12 @@ public class MapEditorDialog extends Dialog implements Disposable{
                 }
             }
         }else{
+            if(Core.input.keyTap(Binding.editor_copy_flip_x)){
+                c.flipX(true);
+            }else if(Core.input.keyTap(Binding.editor_copy_flip_y)){
+                c.flipY(true);
+            }
+
             for(EditorTool tool : EditorTool.all){
                 if(Core.input.keyTap(tool.key)){
                     view.setTool(tool);
@@ -737,5 +781,9 @@ public class MapEditorDialog extends Dialog implements Disposable{
         if(i == 0){
             blockSelection.add("@none").color(Color.lightGray).padLeft(80f).padTop(10f);
         }
+    }
+
+    interface CopyToolAdder {
+        void add(TextureRegionDrawable t, Runnable r, Boolp c);
     }
 }

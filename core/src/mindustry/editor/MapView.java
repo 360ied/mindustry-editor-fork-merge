@@ -25,6 +25,7 @@ public class MapView extends Element implements GestureListener{
     private boolean grid = false;
     private GridImage image = new GridImage(0, 0);
     private Vec2 vec = new Vec2();
+    private Point2 point = new Point2();
     private Rect rect = new Rect();
     private Vec2[][] brushPolygons = new Vec2[MapEditor.brushSizes.length][0];
 
@@ -71,10 +72,22 @@ public class MapView extends Element implements GestureListener{
                 if(!mobile && button != KeyCode.mouseLeft && button != KeyCode.mouseMiddle && button != KeyCode.mouseRight){
                     return true;
                 }
+
+                Point2 p = project(x, y);
                 
                 if(button == KeyCode.mouseRight){
-                    lastTool = tool;
-                    tool = EditorTool.eraser;
+                    if(tool == EditorTool.copy){
+                        editor.copyData.setOrigin(p.x, p.y);
+                        editor.copyData.clearLines();
+                        editor.copyData.clear();
+                    }else{
+                        lastTool = tool;
+                        tool = EditorTool.eraser;
+                    }
+                }
+
+                if(button == KeyCode.mouseLeft && tool == EditorTool.copy){
+                    editor.copyData.select(p.x, p.y);
                 }
 
                 if(button == KeyCode.mouseMiddle){
@@ -85,7 +98,6 @@ public class MapView extends Element implements GestureListener{
                 mousex = x;
                 mousey = y;
 
-                Point2 p = project(x, y);
                 lastx = p.x;
                 lasty = p.y;
                 startx = p.x;
@@ -137,6 +149,14 @@ public class MapView extends Element implements GestureListener{
                     Bresenham2.line(lastx, lasty, p.x, p.y, (cx, cy) -> tool.touched(cx, cy));
                 }
 
+                if(tool == EditorTool.copy){
+                    Copy c = editor.copyData;
+                    switch(event.keyCode){
+                        case mouseRight -> c.adjust(p.x, p.y);
+                        case mouseLeft -> c.move(p.x, p.y);
+                    }
+                }
+
                 if(tool == EditorTool.line && tool.mode == 1){
                     if(Math.abs(p.x - firstTouch.x) > Math.abs(p.y - firstTouch.y)){
                         lastx = p.x;
@@ -151,6 +171,10 @@ public class MapView extends Element implements GestureListener{
                 }
             }
         });
+    }
+
+    public boolean copy(){
+        return (tool == EditorTool.copy || lastTool == EditorTool.copy) && !editor.copyData.empty();
     }
 
     public EditorTool getTool(){
@@ -177,7 +201,7 @@ public class MapView extends Element implements GestureListener{
     public void act(float delta){
         super.act(delta);
 
-        if(Core.scene.getKeyboardFocus() == null || !(Core.scene.getKeyboardFocus() instanceof TextField) && !Core.input.keyDown(KeyCode.controlLeft)){
+        if(Core.scene.getKeyboardFocus() == null || !(Core.scene.getKeyboardFocus() instanceof TextField)){
             float ax = Core.input.axis(Binding.move_x);
             float ay = Core.input.axis(Binding.move_y);
             offsetx -= ax * 15f / zoom;
@@ -196,7 +220,22 @@ public class MapView extends Element implements GestureListener{
 
         if(Core.scene.getScrollFocus() != this) return;
 
-        zoom += Core.input.axis(Binding.zoom) / 10f * zoom;
+        float scroll = Core.input.axis(KeyCode.scroll);
+        if(scroll == 0){
+            return;
+        }
+
+        if(copy() && Core.input.ctrl()){
+            if(scroll > 0){
+                editor.copyData.rotL();
+            } else {
+                editor.copyData.rotR();
+            }
+            return;
+        }
+
+        zoom += scroll / 10f * zoom;
+
         clampZoom();
     }
 
@@ -277,7 +316,26 @@ public class MapView extends Element implements GestureListener{
         Draw.color(Pal.accent);
         Lines.stroke(Scl.scl(2f));
 
-        if((!editor.drawBlock.isMultiblock() || tool == EditorTool.eraser) && tool != EditorTool.fill){
+        if(tool == EditorTool.copy){
+            Copy c = editor.copyData;
+
+            if(!c.empty()){
+                for(int i = 0; i < c.lines.size; i += 2){
+                    point.set(c.dx, c.dy).add(c.lines.get(i));
+                    Vec2 a = unproject(point.x, point.y).add(x, y);
+                    float ax = a.x, ay = a.y;
+                    point.set(c.dx, c.dy).add(c.lines.get(i + 1));
+                    Vec2 b = unproject(point.x, point.y).add(x, y);
+                    Lines.line(ax, ay, b.x, b.y);
+                }
+                drawRect(c.ox, c.oy, c.fw, c.fh, Color.black);
+            } else {
+                drawRect(c.dx, c.dy, c.fw, c.fh, Pal.accent);
+            }
+
+            drawRect(c.dx, c.dy, c.w, c.h, Pal.accent);
+
+        }else if((!editor.drawBlock.isMultiblock() || tool == EditorTool.eraser) && tool != EditorTool.fill){
             if(tool == EditorTool.line && drawing){
                 Vec2 v1 = unproject(startx, starty).add(x, y);
                 float sx = v1.x, sy = v1.y;
@@ -316,6 +374,17 @@ public class MapView extends Element implements GestureListener{
         Draw.reset();
 
         ScissorStack.pop();
+    }
+
+    private void drawRect(int dx, int dy, int w, int h, Color col){
+        Vec2 min = unproject(dx, dy).add(x, y);
+        // because we just have to save that one allocation (i guess)
+        // unproject returns pointer to same vec so min === max
+        float sx = min.x, sy = min.y;
+        unproject(dx - w, dy - h).add(x, y);
+
+        Draw.color(col);
+        Lines.rect(sx, sy, sx - min.x, sy - min.y);
     }
 
     private boolean active(){
